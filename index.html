@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penentuan Beasiswa dengan SAW (Lanjutan + LocalStorage)</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Penentuan Penerima Beasiswa (SAW)</h1>
+
+        <!-- Form Kriteria -->
+        <h2>Tambah Kriteria</h2>
+        <div class="form-group">
+            <label>Nama Kriteria:</label>
+            <input type="text" id="namaKriteria" placeholder="Masukkan nama kriteria">
+        </div>
+        <div class="form-group">
+            <label>Tipe:</label>
+            <select id="tipeKriteria">
+                <option value="benefit">Benefit (Makin besar makin baik)</option>
+                <option value="cost">Cost (Makin kecil makin baik)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Bobot (0-1):</label>
+            <input type="number" id="bobotKriteria" min="0" max="1" step="0.01">
+        </div>
+        <button onclick="tambahKriteria()">Tambah Kriteria</button>
+        <button onclick="resetSemua()">Reset Semua</button>
+
+        <!-- Tabel Kriteria -->
+        <table id="tabelKriteria">
+            <thead>
+                <tr>
+                    <th>Nama Kriteria</th>
+                    <th>Tipe</th>
+                    <th>Bobot</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyKriteria"></tbody>
+        </table>
+
+        <!-- Form Input Siswa -->
+        <h2>Tambah Siswa</h2>
+        <div id="formSiswa" class="form-siswa"></div>
+        <button onclick="tambahSiswa()">Tambah Siswa</button>
+        <button onclick="hitungSAW()">Hitung SAW</button>
+
+        <!-- Tabel Input Siswa -->
+        <h2>Data Siswa</h2>
+        <table id="tabelInput">
+            <thead id="theadInput"></thead>
+            <tbody id="tbodyInput"></tbody>
+        </table>
+
+        <!-- Tabel Hasil -->
+        <h2>Hasil Perhitungan</h2>
+        <table id="tabelHasil">
+            <thead>
+                <tr>
+                    <th>Nama</th>
+                    <th>Skor SAW</th>
+                    <th>Peringkat</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyHasil"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Inisialisasi data dari LocalStorage atau kosong
+        let kriteria = JSON.parse(localStorage.getItem("kriteria")) || [];
+        let dataSiswa = JSON.parse(localStorage.getItem("dataSiswa")) || [];
+
+        // Muat data saat halaman dibuka
+        window.onload = function() {
+            updateTabelKriteria();
+            updateFormSiswa();
+            updateTabelInputHeader();
+            updateTabelInput();
+        };
+
+        // Simpan ke LocalStorage
+        function simpanKeLocalStorage() {
+            localStorage.setItem("kriteria", JSON.stringify(kriteria));
+            localStorage.setItem("dataSiswa", JSON.stringify(dataSiswa));
+        }
+
+        // Tambah Kriteria
+        function tambahKriteria() {
+            const nama = document.getElementById("namaKriteria").value.trim();
+            const tipe = document.getElementById("tipeKriteria").value;
+            const bobot = parseFloat(document.getElementById("bobotKriteria").value);
+
+            if (!nama || isNaN(bobot) || bobot < 0 || bobot > 1) {
+                alert("Nama kriteria harus diisi dan bobot harus antara 0-1!");
+                return;
+            }
+            if (kriteria.some(k => k.nama === nama)) {
+                alert("Nama kriteria sudah ada!");
+                return;
+            }
+
+            kriteria.push({ nama, tipe, bobot });
+            updateTabelKriteria();
+            updateFormSiswa();
+            resetFormKriteria();
+            updateTabelInputHeader();
+            simpanKeLocalStorage();
+        }
+
+        // Update Tabel Kriteria
+        function updateTabelKriteria() {
+            const tbody = document.getElementById("tbodyKriteria");
+            tbody.innerHTML = "";
+            kriteria.forEach((k, index) => {
+                const row = `<tr>
+                    <td>${k.nama}</td>
+                    <td>${k.tipe}</td>
+                    <td>${k.bobot}</td>
+                    <td>
+                        <button class="edit" onclick="editKriteria(${index})">Edit</button>
+                        <button class="hapus" onclick="hapusKriteria(${index})">Hapus</button>
+                    </td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Edit Kriteria
+        function editKriteria(index) {
+            const k = kriteria[index];
+            document.getElementById("namaKriteria").value = k.nama;
+            document.getElementById("tipeKriteria").value = k.tipe;
+            document.getElementById("bobotKriteria").value = k.bobot;
+            kriteria.splice(index, 1);
+            updateTabelKriteria();
+            updateFormSiswa();
+            updateTabelInputHeader();
+            simpanKeLocalStorage();
+        }
+
+        // Hapus Kriteria
+        function hapusKriteria(index) {
+            if (confirm("Yakin ingin menghapus kriteria ini?")) {
+                const namaKriteria = kriteria[index].nama;
+                kriteria.splice(index, 1);
+                dataSiswa = dataSiswa.map(s => {
+                    delete s.nilai[namaKriteria];
+                    return s;
+                });
+                updateTabelKriteria();
+                updateFormSiswa();
+                updateTabelInputHeader();
+                updateTabelInput();
+                simpanKeLocalStorage();
+            }
+        }
+
+        // Reset Form Kriteria
+        function resetFormKriteria() {
+            document.getElementById("namaKriteria").value = "";
+            document.getElementById("bobotKriteria").value = "";
+        }
+
+        // Update Form Siswa Dinamis
+        function updateFormSiswa() {
+            const formSiswa = document.getElementById("formSiswa");
+            formSiswa.innerHTML = '<div class="form-group"><label>Nama Siswa:</label><input type="text" id="namaSiswa" placeholder="Masukkan nama"></div>';
+            kriteria.forEach((k, index) => {
+                formSiswa.innerHTML += `
+                    <div class="form-group">
+                        <label>${k.nama}:</label>
+                        <input type="number" id="kriteria${index}" min="0" step="0.1">
+                    </div>`;
+            });
+        }
+
+        // Tambah Siswa
+        function tambahSiswa() {
+            const nama = document.getElementById("namaSiswa").value.trim();
+            let siswa = { nama, nilai: {} };
+
+            if (!nama) {
+                alert("Nama siswa harus diisi!");
+                return;
+            }
+            if (dataSiswa.some(s => s.nama === nama)) {
+                alert("Nama siswa sudah ada!");
+                return;
+            }
+
+            let valid = true;
+            kriteria.forEach((k, index) => {
+                const nilai = parseFloat(document.getElementById(`kriteria${index}`).value);
+                if (isNaN(nilai) || nilai < 0) {
+                    valid = false;
+                } else {
+                    siswa.nilai[k.nama] = nilai;
+                }
+            });
+
+            if (valid) {
+                dataSiswa.push(siswa);
+                updateTabelInput();
+                resetFormSiswa();
+                simpanKeLocalStorage();
+            } else {
+                alert("Lengkapi semua nilai kriteria dengan angka positif!");
+            }
+        }
+
+        // Edit Siswa
+        function editSiswa(index) {
+            const s = dataSiswa[index];
+            document.getElementById("namaSiswa").value = s.nama;
+            kriteria.forEach((k, i) => {
+                document.getElementById(`kriteria${i}`).value = s.nilai[k.nama];
+            });
+            dataSiswa.splice(index, 1);
+            updateTabelInput();
+            simpanKeLocalStorage();
+        }
+
+        // Hapus Siswa
+        function hapusSiswa(index) {
+            if (confirm("Yakin ingin menghapus siswa ini?")) {
+                dataSiswa.splice(index, 1);
+                updateTabelInput();
+                simpanKeLocalStorage();
+            }
+        }
+
+        // Reset Form Siswa
+        function resetFormSiswa() {
+            document.getElementById("namaSiswa").value = "";
+            kriteria.forEach((_, index) => {
+                document.getElementById(`kriteria${index}`).value = "";
+            });
+        }
+
+        // Update Header Tabel Input
+        function updateTabelInputHeader() {
+            const thead = document.getElementById("theadInput");
+            thead.innerHTML = "<tr><th>Nama</th>" + kriteria.map(k => `<th>${k.nama}</th>`).join("") + "<th>Aksi</th></tr>";
+        }
+
+        // Update Tabel Input
+        function updateTabelInput() {
+            const tbody = document.getElementById("tbodyInput");
+            tbody.innerHTML = "";
+            dataSiswa.forEach((s, index) => {
+                let row = `<tr><td>${s.nama}</td>`;
+                kriteria.forEach(k => {
+                    row += `<td>${s.nilai[k.nama]}</td>`;
+                });
+                row += `<td>
+                    <button class="edit" onclick="editSiswa(${index})">Edit</button>
+                    <button class="hapus" onclick="hapusSiswa(${index})">Hapus</button>
+                </td></tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Hitung SAW
+        function hitungSAW() {
+            if (kriteria.length === 0 || dataSiswa.length === 0) {
+                alert("Tambahkan kriteria dan data siswa terlebih dahulu!");
+                return;
+            }
+
+            const totalBobot = kriteria.reduce((sum, k) => sum + k.bobot, 0);
+            if (Math.abs(totalBobot - 1) > 0.01) {
+                alert("Total bobot harus mendekati 1! Saat ini: " + totalBobot.toFixed(2));
+                return;
+            }
+
+            // Normalisasi
+            let normalizedData = dataSiswa.map(s => {
+                let normalized = { nama: s.nama, nilai: {} };
+                kriteria.forEach(k => {
+                    const nilaiAll = dataSiswa.map(d => d.nilai[k.nama]);
+                    const max = Math.max(...nilaiAll);
+                    const min = Math.min(...nilaiAll);
+                    normalized.nilai[k.nama] = k.tipe === "benefit" ? s.nilai[k.nama] / max : min / s.nilai[k.nama];
+                });
+                return normalized;
+            });
+
+            // Hitung Skor
+            const hasil = normalizedData.map(s => {
+                let skor = 0;
+                kriteria.forEach(k => {
+                    skor += s.nilai[k.nama] * k.bobot;
+                });
+                return { nama: s.nama, skor };
+            });
+
+            // Urutkan
+            hasil.sort((a, b) => b.skor - a.skor);
+
+            // Update Tabel Hasil
+            const tbodyHasil = document.getElementById("tbodyHasil");
+            tbodyHasil.innerHTML = "";
+            hasil.forEach((s, index) => {
+                tbodyHasil.innerHTML += `<tr>
+                    <td>${s.nama}</td>
+                    <td>${s.skor.toFixed(3)}</td>
+                    <td>${index + 1}</td>
+                </tr>`;
+            });
+        }
+
+        // Reset Semua Data
+        function resetSemua() {
+            if (confirm("Yakin ingin mereset semua data?")) {
+                kriteria = [];
+                dataSiswa = [];
+                localStorage.clear();
+                updateTabelKriteria();
+                updateFormSiswa();
+                updateTabelInputHeader();
+                updateTabelInput();
+                document.getElementById("tbodyHasil").innerHTML = "";
+            }
+        }
+    </script>
+</body>
+</html>
